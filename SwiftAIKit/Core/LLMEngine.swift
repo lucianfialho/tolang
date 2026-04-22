@@ -45,9 +45,8 @@ public class LLMEngine: ObservableObject {
         guard modelAvailable else { throw LLMError.notLoaded }
 
         let session = LanguageModelSession(
-            model: .default,
-            tools: [],
-            instructions: "You are a concise assistant. Answer directly with only what is asked. No preamble, no explanation, no markdown unless explicitly requested."
+            model: SystemLanguageModel(guardrails: .permissiveContentTransformations),
+            instructions: "You help people communicate across languages. When given text and a target language, output only the text converted to that language. Reply with nothing else."
         )
         let response = try await session.respond(to: prompt)
         return response.content

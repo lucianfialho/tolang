@@ -1,4 +1,4 @@
-name: MyApp
+name: ToLang
 options:
   bundleIdPrefix: com.yourname
   deploymentTarget:
@@ -11,7 +11,7 @@ packages:
     from: "2.6.0"
 
 targets:
-  MyApp:
+  ToLang:
     type: application
     platform: macOS
     sources:
@@ -22,24 +22,25 @@ targets:
         INFOPLIST_FILE: MyApp/Info.plist
         CODE_SIGN_ENTITLEMENTS: MyApp/MyApp.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourname.myapp
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourname.tolang
         ENABLE_APP_SANDBOX: NO
         ENABLE_HARDENED_RUNTIME: NO
         CODE_SIGN_IDENTITY: "Apple Development"
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: ""  # Set to your Apple Developer Team ID
+        OTHER_LDFLAGS: "-framework Speech"
     dependencies:
       - package: Sparkle
 
-  SwiftAIKitTests:
+  ToLangTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - SwiftAIKitTests
     dependencies:
-      - target: MyApp
+      - target: ToLang
     settings:
       base:
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/MyApp.app/Contents/MacOS/MyApp"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ToLang.app/Contents/MacOS/ToLang"
         BUNDLE_LOADER: "$(TEST_HOST)"
         GENERATE_INFOPLIST_FILE: YES

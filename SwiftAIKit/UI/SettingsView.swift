@@ -1,142 +1,164 @@
 import SwiftUI
+import ScreenCaptureKit
 
-/// Settings window: manage custom actions (CRUD).
-public struct SettingsView: View {
-    @State private var actions: [Action]
-    @State private var editingAction: Action?
-    @State private var showingAddSheet = false
+public struct ToLangSettingsView: View {
+    @AppStorage("captureAppBundleID") private var captureAppBundleID: String = "com.hnc.Discord"
+    @AppStorage("captureEnabled") private var captureEnabled: Bool = true
 
-    private let onActionsChanged: ([Action]) -> Void
+    @State private var availableApps: [SCRunningApplication] = []
+    @State private var isLoadingApps = true
 
-    public init(initialActions: [Action], onActionsChanged: @escaping ([Action]) -> Void) {
-        _actions = State(initialValue: initialActions)
-        self.onActionsChanged = onActionsChanged
-    }
+    public init() {}
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Actions")
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 20) {
+            Text("ToLang Settings")
+                .font(.title2.bold())
 
-            List {
-                ForEach(actions) { action in
-                    HStack {
-                        Image(systemName: action.icon)
-                            .frame(width: 24)
-                        VStack(alignment: .leading) {
-                            Text(action.name).fontWeight(.medium)
-                            Text(action.prompt)
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                                .lineLimit(1)
+            Divider()
+
+            // App capture section
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label("Capturar áudio do app", systemImage: "headphones")
+                        .font(.headline)
+                    Spacer()
+                    Toggle("", isOn: $captureEnabled)
+                        .labelsHidden()
+                }
+
+                Text("Selecione o app cujo áudio será capturado e traduzido (Discord, Zoom, etc).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if captureEnabled {
+                    HStack(spacing: 8) {
+                        Picker("App", selection: $captureAppBundleID) {
+                            if isLoadingApps {
+                                // Keep the current selection valid while loading
+                                Text(captureAppBundleID.isEmpty ? "Carregando…" : "\(appIcon(for: captureAppBundleID)) \(captureAppBundleID)")
+                                    .tag(captureAppBundleID)
+                            } else if availableApps.isEmpty {
+                                Text("Nenhum app detectado").tag("")
+                            }
+                            ForEach(availableApps, id: \.bundleIdentifier) { app in
+                                Text("\(appIcon(for: app.bundleIdentifier)) \(app.applicationName)")
+                                    .tag(app.bundleIdentifier)
+                            }
                         }
-                        Spacer()
-                        Button("Edit") { editingAction = action }
-                            .buttonStyle(.plain)
-                            .foregroundColor(.accentColor)
+                        .frame(maxWidth: .infinity)
+
+                        if isLoadingApps {
+                            ProgressView().scaleEffect(0.7)
+                        } else {
+                            Button {
+                                Task { await loadApps() }
+                            } label: {
+                                Image(systemName: "arrow.clockwise")
+                            }
+                            .help("Atualizar lista")
+                        }
+                    }
+
+                    if !captureAppBundleID.isEmpty {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.green)
+                                .font(.caption)
+                            Text("Capturando: \(selectedAppName)")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
-                .onDelete(perform: deleteActions)
-                .onMove(perform: moveActions)
             }
-            .listStyle(.bordered)
+            .padding()
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+
+            // Hotkey info
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Atalho de teclado", systemImage: "keyboard")
+                    .font(.headline)
+                HStack(spacing: 6) {
+                    KeyBadge("⌘")
+                    KeyBadge("⇧")
+                    KeyBadge("L")
+                    Text("Liga/desliga escuta")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding()
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
+
+            Spacer()
 
             HStack {
-                Label("Powered by Apple Intelligence", systemImage: "sparkles")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
                 Spacer()
-                Button("Add Action") { showingAddSheet = true }
+                Button("Fechar") { NSApp.keyWindow?.close() }
+                    .keyboardShortcut(.return)
                     .buttonStyle(.borderedProminent)
             }
         }
-        .padding()
-        .frame(width: 480, height: 360)
-        .sheet(isPresented: $showingAddSheet) {
-            ActionEditSheet(action: nil) { newAction in
-                actions.append(newAction)
-                onActionsChanged(actions)
+        .padding(24)
+        .frame(width: 440, height: 360)
+        .task { await loadApps() }
+    }
+
+    private var selectedAppName: String {
+        availableApps.first { $0.bundleIdentifier == captureAppBundleID }?.applicationName
+            ?? captureAppBundleID
+    }
+
+    private func loadApps() async {
+        isLoadingApps = true
+        defer { isLoadingApps = false }
+
+        guard let content = try? await SCShareableContent.current else { return }
+
+        var seen = Set<String>()
+        let all = content.applications
+            .filter {
+                !$0.bundleIdentifier.isEmpty &&
+                $0.processID != ProcessInfo.processInfo.processIdentifier &&
+                seen.insert($0.bundleIdentifier).inserted      // deduplicate by bundle ID
             }
-        }
-        .sheet(item: $editingAction) { action in
-            ActionEditSheet(action: action) { updated in
-                if let index = actions.firstIndex(where: { $0.id == updated.id }) {
-                    actions[index] = updated
-                    onActionsChanged(actions)
-                }
+            .sorted {
+                let aVoice = AppAudioCapture.voiceAppBundleIDs.contains($0.bundleIdentifier)
+                let bVoice = AppAudioCapture.voiceAppBundleIDs.contains($1.bundleIdentifier)
+                if aVoice != bVoice { return aVoice }
+                return $0.applicationName < $1.applicationName
             }
+
+        availableApps = all
+
+        // Auto-select first known voice app if saved choice isn't running
+        if !all.contains(where: { $0.bundleIdentifier == captureAppBundleID }),
+           let first = all.first(where: { AppAudioCapture.voiceAppBundleIDs.contains($0.bundleIdentifier) }) {
+            captureAppBundleID = first.bundleIdentifier
         }
     }
 
-    private func deleteActions(at offsets: IndexSet) {
-        actions.remove(atOffsets: offsets)
-        onActionsChanged(actions)
-    }
-
-    private func moveActions(from source: IndexSet, to destination: Int) {
-        actions.move(fromOffsets: source, toOffset: destination)
-        onActionsChanged(actions)
+    private func appIcon(for bundleID: String) -> String {
+        switch bundleID {
+        case "com.hnc.Discord":                        return "🎮"
+        case "us.zoom.xos":                            return "📹"
+        case "com.microsoft.teams2":                   return "💼"
+        case "com.tinyspeck.slackmacgap":              return "#️⃣"
+        case "com.apple.FaceTime":                     return "📱"
+        case "com.google.Chrome", "com.apple.Safari":  return "🌐"
+        default:                                       return "🔊"
+        }
     }
 }
 
-private struct ActionEditSheet: View {
-    let existing: Action?
-    let onSave: (Action) -> Void
-
-    @State private var name: String
-    @State private var prompt: String
-    @State private var icon: String
-    @Environment(\.dismiss) private var dismiss
-
-    init(action: Action?, onSave: @escaping (Action) -> Void) {
-        self.existing = action
-        self.onSave = onSave
-        _name = State(initialValue: action?.name ?? "")
-        _prompt = State(initialValue: action?.prompt ?? "")
-        _icon = State(initialValue: action?.icon ?? "wand.and.stars")
-    }
-
+private struct KeyBadge: View {
+    let label: String
+    init(_ label: String) { self.label = label }
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text(existing == nil ? "New Action" : "Edit Action")
-                .font(.headline)
-
-            LabeledContent("Name") {
-                TextField("e.g. Format JSON", text: $name)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            LabeledContent("Icon") {
-                TextField("SF Symbol name", text: $icon)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Prompt")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                TextEditor(text: $prompt)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(height: 80)
-                    .border(Color(NSColor.separatorColor))
-                Text("Use {input} where the selected text should be inserted.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") {
-                    let saved = Action(name, prompt: prompt, icon: icon, id: existing?.id ?? UUID())
-                    onSave(saved)
-                    dismiss()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(name.isEmpty || prompt.isEmpty)
-            }
-        }
-        .padding()
-        .frame(width: 400)
+        Text(label)
+            .font(.system(size: 12, weight: .medium, design: .monospaced))
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 5))
     }
 }

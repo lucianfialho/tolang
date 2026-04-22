@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.yourname.myapp</string>
+    <string>com.yourname.tolang</string>
     <key>CFBundleName</key>
-    <string>MyApp</string>
+    <string>ToLang</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSPrincipalClass</key>
@@ -14,6 +14,12 @@
     <string>1.0.0</string>
     <key>CFBundleVersion</key>
     <string>1</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>ToLang needs speech recognition to transcribe what you say in Portuguese.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>ToLang needs microphone access to hear you speak.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>ToLang needs screen recording permission to capture audio from Discord and other voice apps.</string>
     <key>SUFeedURL</key>
     <string>https://example.com/appcast.xml</string>
 </dict>
