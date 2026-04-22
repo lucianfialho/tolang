@@ -1,115 +1,101 @@
-# SwiftAIKit
+# ToLang
 
-> Apple Intelligence in your macOS app. No API key. No model download. Just actions.
+> Real-time bilingual translation overlay for macOS — speak, and your words appear translated on screen.
 
-Adding AI to a macOS app used to mean picking a provider, managing API keys,
-downloading models, worrying about privacy, and hoping the network holds up.
-SwiftAIKit cuts all of that — it runs entirely on-device via the Apple Neural Engine,
-and your entire integration is one file:
+ToLang sits in your menu bar and listens. When you speak Portuguese, it shows English on a floating overlay. When someone speaks English in Discord or Zoom, it shows Portuguese. All on-device, no API keys, no cloud.
 
-```swift
-static let actions: [Action] = [
-    Action("Fix Grammar", prompt: "Fix grammar. Return only corrected text:\n\n{input}", icon: "checkmark.seal"),
-    Action("Summarize",   prompt: "Summarize in 2 bullets:\n\n{input}",                 icon: "text.quote"),
-]
-```
-
-That's it. SwiftAIKit handles capture, inference, and result presentation.
+![ToLang overlay with Liquid Glass UI on macOS 26](.github/preview.png)
 
 ---
 
-## Features
+## What it does
 
-- **Zero configuration** — define actions in one file, framework handles the rest
-- **Fully on-device** — runs via Apple Neural Engine, no internet required
-- **Privacy first** — text never leaves the device
-- **Two trigger modes** — global hotkey or auto-popup on clipboard copy
-- **Full action CRUD** — add, edit, remove actions at runtime via Settings
-- **UI-agnostic framework** — `MyApp` is just a reference implementation; use SwiftAIKit in any macOS app
+- **Mic → translation**: speak in your language, see the translation instantly on screen
+- **App audio → translation**: captures Discord, Zoom, Teams audio and translates what others say back to you
+- **Bidirectional**: auto-detects which language is being spoken and translates to the other
+- **Any language pair**: Portuguese ↔ English, Spanish ↔ English, Japanese ↔ English, and more
+- **Floating overlay**: stays on top of everything, movable, resizable, remembers position
+- **Liquid Glass UI**: native macOS 26 glass effect that adapts to any background
 
 ## Requirements
 
 - **macOS 26** (Tahoe) or later
-- **Apple Silicon** with Apple Intelligence enabled
+- **Apple Silicon** with Apple Intelligence enabled in System Settings
 - Xcode 26+
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
 
 ## Getting started
 
 ```bash
-# 1. Use this template on GitHub, then clone your repo
-git clone https://github.com/your-username/your-app-name
-cd your-app-name
-
-# 2. Generate and open the Xcode project
-xcodegen generate && open MyApp.xcodeproj
+git clone https://github.com/lucianfialho/tolang
+cd tolang
+xcodegen generate
+open ToLang.xcodeproj
 ```
 
-3. Set your **Team** in Xcode → Signing & Capabilities (or set `DEVELOPMENT_TEAM` in `project.yml`)
-4. Edit **`MyApp/AppConfig.swift`** — the only file you need to touch
-5. `Cmd+R` to run
+1. Set your **Team** in Xcode → Signing & Capabilities
+2. `Cmd+R` to run
+3. Click the menu bar icon → select your language pair → press `Cmd+Shift+L` to start listening
 
-## AppConfig.swift
+## Hotkey
 
-The only file you edit. Define your app name, trigger mode, and actions:
+`Cmd+Shift+L` — toggle listening on/off
 
-```swift
-struct AppConfig: SwiftAIAppConfig {
-    static let appName = "My App"
-    static let trigger = Trigger.hotkey  // .clipboard | .hotkey
+## Language pairs
 
-    static let actions: [Action] = [
-        Action("Format JSON",     prompt: "Format as pretty JSON. Return only the JSON:\n\n{input}",              icon: "curlybraces"),
-        Action("Translate EN→PT", prompt: "Translate to Brazilian Portuguese. Return only the translation:\n\n{input}", icon: "globe"),
-        Action("Summarize",       prompt: "Summarize in 2 bullet points:\n\n{input}",                             icon: "text.quote"),
-        Action("Fix Grammar",     prompt: "Fix grammar and spelling. Return only the corrected text:\n\n{input}", icon: "checkmark.seal"),
-    ]
-}
-```
+Open the menu bar icon to switch pairs:
 
-`{input}` is replaced with the captured text at runtime.
-
-## Triggers
-
-| Trigger | Behavior |
+| Pair | Direction |
 |---|---|
-| `.hotkey` | Press `Cmd+Shift+V` — uses current clipboard content |
-| `.clipboard` | Popup appears automatically whenever you copy text |
+| 🇧🇷 ↔ 🇺🇸 | Português ↔ English |
+| 🇺🇸 ↔ 🇧🇷 | English ↔ Português |
+| 🇪🇸 ↔ 🇺🇸 | Español ↔ English |
+| 🇫🇷 ↔ 🇺🇸 | Français ↔ English |
+| 🇩🇪 ↔ 🇺🇸 | Deutsch ↔ English |
+| 🇯🇵 ↔ 🇺🇸 | 日本語 ↔ English |
+| 🇨🇳 ↔ 🇺🇸 | 中文 ↔ English |
+
+All pairs are bidirectional — ToLang detects which language is being spoken.
+
+## Settings
+
+Open **Settings** from the menu bar to choose which app's audio to capture (Discord, Zoom, Slack, Teams, etc.).
+
+## How it works
+
+```
+Microphone ──► SFSpeechRecognizer (pt-BR) ──► silence detected ──► Apple Intelligence ──► overlay
+Discord    ──► ScreenCaptureKit audio     ──► silence detected ──► Apple Intelligence ──► overlay
+```
+
+- Speech recognition runs on-device via `SFSpeechRecognizer`
+- Translation runs on-device via `FoundationModels` (Apple Intelligence)
+- App audio captured via `ScreenCaptureKit` — no virtual audio drivers needed
+- Auto-recovery: watchdog restarts the recognizer if it goes silent
 
 ## Project structure
 
 ```
-SwiftAIKit/                     framework — don't edit
-    Core/
-      LLMEngine.swift         FoundationModels session management
-      MenuBarManager.swift    status bar icon and menu
-      HotkeyManager.swift     global hotkey listener
-      ClipboardMonitor.swift  clipboard polling
-    UI/
-      PopupPanel.swift        floating NSPanel near cursor
-      ActionPickerView.swift  action list
-      ResultView.swift        result + copy button
-      SettingsView.swift      action CRUD
-    Models/
-      Action.swift            Action model + {input} substitution
-      Trigger.swift           trigger enum
-      SwiftAIAppConfig.swift      protocol your AppConfig must conform to
-MyApp/                      reference implementation — edit here
-    AppConfig.swift           ← the only file you need to touch
-    MyAppApp.swift            @main entry point + AppDelegate
-SwiftAIKitTests/            unit tests
+MyApp/
+  MyAppApp.swift          app delegate, audio pipeline, translation logic
+  AppConfig.swift         app name
+SwiftAIKit/
+  Core/
+    LLMEngine.swift       Apple Intelligence session
+    SpeechEngine.swift    microphone capture + SFSpeechRecognizer
+    AppAudioCapture.swift ScreenCaptureKit app audio
+    ContextDetector.swift detects frontmost app via Accessibility API
+    MenuBarManager.swift  menu bar icon and language pair selector
+    LanguagePair.swift    language model + presets
+    ToLangLogger.swift    os.Logger categories
+  UI/
+    SubtitleOverlay.swift floating NSPanel + Liquid Glass SwiftUI view
+    SettingsView.swift    app audio picker
 ```
 
-## Using SwiftAIKit in an existing app
+## Privacy
 
-SwiftAIKit doesn't have an initializer — it's a template, not a library you call into.
-To integrate it in an existing app:
-
-1. Copy the `SwiftAIKit/` folder into your Xcode project and add the files to your target
-2. Create `AppConfig.swift` conforming to `SwiftAIAppConfig` (see [AppConfig.swift](#appconfigswift) above)
-3. Copy `MyApp/MyAppApp.swift` into your project and wire `AppDelegate` to your `@main` entry point
-
-All behaviour is driven by your `AppConfig` — no other changes needed.
+Everything runs on your Mac. No audio, text, or translations are sent to any server. Apple Intelligence processes everything locally via the Apple Neural Engine.
 
 ## License
 
